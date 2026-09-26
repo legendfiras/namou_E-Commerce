@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { AvailabilityNotice } from '../components/layout/AvailabilityNotice.tsx';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs.tsx';
 import { ProductImage } from '../components/product/ProductImage.tsx';
 import { VariantPurchase } from '../components/product/VariantPurchase.tsx';
@@ -13,7 +14,8 @@ export function WishlistPage({
   onFeedback: (message: string) => void;
 }) {
   const store = useStore();
-  const { products, status } = useStorefrontCatalog();
+  const { authStatus, retryStorefront } = store;
+  const { products } = useStorefrontCatalog();
 
   const items = store.wishlist
     .map((item) => products.find((product) => product.id === item.productId))
@@ -21,18 +23,29 @@ export function WishlistPage({
       Boolean(product),
     );
 
-  if (status === 'loading') {
+  if (authStatus === 'loading') {
     return (
       <main id="main">
-        <p>Loading wishlist…</p>
+        <h1>Wishlist</h1>
+        <p className="status-panel" role="status">
+          Checking your saved wishlist…
+        </p>
       </main>
     );
   }
 
-  if (status === 'error') {
+  if (authStatus === 'error') {
     return (
-      <main id="main">
-        <p className="feedback-error">The catalog could not be loaded.</p>
+      <main id="main" className="empty-state">
+        <h1>Wishlist</h1>
+        <p>Your saved wishlist could not be loaded.</p>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={retryStorefront}
+        >
+          Try again
+        </button>
       </main>
     );
   }
@@ -60,6 +73,7 @@ export function WishlistPage({
         items={[{ label: 'Home', to: '/' }, { label: 'Wishlist' }]}
       />
       <h1>Wishlist</h1>
+      <AvailabilityNotice />
       <section className="cart-list">
         {items.map((product) => {
           const preview = product.variants[0];

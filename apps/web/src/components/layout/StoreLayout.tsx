@@ -13,13 +13,16 @@ export function StoreLayout({
   toast: string | null;
   setToast: (message: string | null) => void;
 }) {
-  const { session, cart, signOut } = useStore();
+  const { session, cart, signOut, authStatus } = useStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [headerQuery, setHeaderQuery] = useState('');
   const [mobileQuery, setMobileQuery] = useState('');
   const navigate = useNavigate();
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const accountReady = authStatus === 'ready';
+  const cartCount = accountReady
+    ? cart.reduce((sum, item) => sum + item.quantity, 0)
+    : 0;
 
   const openSearch = (query: string) => {
     const q = query.trim();
@@ -94,7 +97,11 @@ export function StoreLayout({
                 <span className="cart-count">{cartCount}</span>
               ) : null}
             </NavLink>
-            {session ? (
+            {authStatus === 'loading' ? (
+              <span className="text-button header-account-status" role="status">
+                Checking account
+              </span>
+            ) : session ? (
               <button
                 type="button"
                 className="text-button"
@@ -166,7 +173,9 @@ export function StoreLayout({
             </Link>
           </p>
           <p>
-            {session ? (
+            {authStatus === 'loading' ? (
+              <span role="status">Checking account</span>
+            ) : session ? (
               <button
                 type="button"
                 className="ghost-button"
@@ -240,7 +249,9 @@ export function StoreLayout({
               <h2>Account</h2>
               <Link to="/cart">Cart</Link>
               <Link to="/wishlist">Wishlist</Link>
-              {session ? null : <Link to="/login">Sign in</Link>}
+              {accountReady && !session ? (
+                <Link to="/login">Sign in</Link>
+              ) : null}
             </div>
           </nav>
         </div>

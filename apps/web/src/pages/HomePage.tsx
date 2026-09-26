@@ -1,39 +1,24 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import { AvailabilityNotice } from '../components/layout/AvailabilityNotice.tsx';
 import { ProductCard } from '../components/product/ProductCard.tsx';
-import { getFeaturedProducts } from '../services/catalogService.ts';
-import type { Product } from '../types/store.ts';
+import { featuredProductSlugs } from '../data/catalog.ts';
+import { useStorefrontCatalog } from '../hooks/useStorefrontCatalog.ts';
 
 export function HomePage({
   onFeedback,
 }: {
   onFeedback: (message: string) => void;
 }) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
-    'loading',
+  const { products: catalog } = useStorefrontCatalog();
+  const products = useMemo(
+    () =>
+      featuredProductSlugs.flatMap((slug) => {
+        const product = catalog.find((item) => item.slug === slug);
+        return product ? [product] : [];
+      }),
+    [catalog],
   );
-
-  useEffect(() => {
-    let active = true;
-    setStatus('loading');
-    void getFeaturedProducts()
-      .then((result) => {
-        if (!active) {
-          return;
-        }
-        setProducts(result);
-        setStatus('ready');
-      })
-      .catch(() => {
-        if (active) {
-          setStatus('error');
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
 
   return (
     <main id="main">
@@ -61,11 +46,8 @@ export function HomePage({
           <h2>Featured</h2>
           <Link to="/products">View all</Link>
         </div>
-        {status === 'loading' ? <p>Loading featured products…</p> : null}
-        {status === 'error' ? (
-          <p className="feedback-error">The catalog could not be loaded.</p>
-        ) : null}
-        {status === 'ready' && products.length === 0 ? (
+        <AvailabilityNotice />
+        {products.length === 0 ? (
           <div className="empty-state">
             <p>No featured products are available right now.</p>
             <Link className="secondary-button" to="/products">
@@ -73,7 +55,7 @@ export function HomePage({
             </Link>
           </div>
         ) : null}
-        {status === 'ready' && products.length > 0 ? (
+        {products.length > 0 ? (
           <div className="product-grid">
             {products.map((product, index) => (
               <ProductCard

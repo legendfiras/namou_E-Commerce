@@ -11,7 +11,7 @@ import {
   type SearchSuggestion,
 } from '../../domain/catalogQuery.ts';
 import { formatUsd } from '../../domain/money.ts';
-import { getSeedCatalog } from '../../data/catalog.ts';
+import { getTemporaryCatalog } from '../../data/catalog.ts';
 import {
   getCatalogSnapshot,
   loadStorefrontCatalog,
@@ -43,7 +43,7 @@ export function SearchField({
   const rootRef = useRef<HTMLDivElement>(null);
   const [catalog, setCatalog] = useState<Product[]>(() => {
     const live = getCatalogSnapshot();
-    return live.length > 0 ? live : getSeedCatalog();
+    return live.length > 0 ? live : getTemporaryCatalog();
   });
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -59,7 +59,7 @@ export function SearchField({
       .catch(() => {
         if (active) {
           setCatalog((current) =>
-            current.length > 0 ? current : getSeedCatalog(),
+            current.length > 0 ? current : getTemporaryCatalog(),
           );
         }
       });

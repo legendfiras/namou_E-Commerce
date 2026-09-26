@@ -9,6 +9,7 @@ import type { Order } from '../types/store.ts';
 
 export function OrderConfirmationPage() {
   const { orderId } = useParams();
+  const [attempt, setAttempt] = useState(0);
   const [order, setOrder] = useState<Order | null>(null);
   const [status, setStatus] = useState<
     'loading' | 'ready' | 'missing' | 'unauthorized' | 'error'
@@ -44,7 +45,7 @@ export function OrderConfirmationPage() {
     return () => {
       active = false;
     };
-  }, [orderId]);
+  }, [attempt, orderId]);
 
   if (status === 'loading') {
     return (
@@ -77,6 +78,13 @@ export function OrderConfirmationPage() {
           The order confirmation could not be loaded. If the order was placed,
           it is saved on this account.
         </p>
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => setAttempt((current) => current + 1)}
+        >
+          Try again
+        </button>
         <Link className="primary-button" to="/products">
           Continue shopping
         </Link>

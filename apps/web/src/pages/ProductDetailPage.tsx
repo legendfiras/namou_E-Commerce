@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { AvailabilityNotice } from '../components/layout/AvailabilityNotice.tsx';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs.tsx';
 import { ColorPicker } from '../components/product/ColorPicker.tsx';
 import { ProductCard } from '../components/product/ProductCard.tsx';
@@ -10,12 +11,9 @@ import {
   uniqueColors,
 } from '../domain/catalogQuery.ts';
 import { formatUsd } from '../domain/money.ts';
-import {
-  getProductBySlug,
-  getRelatedProducts,
-} from '../services/catalogService.ts';
+import { useStorefrontCatalog } from '../hooks/useStorefrontCatalog.ts';
 import { useStore } from '../store/StoreContext.tsx';
-import type { Product, ProductVariant } from '../types/store.ts';
+import type { ProductVariant } from '../types/store.ts';
 
 export function ProductDetailPage({
   onFeedback,
@@ -24,56 +22,36 @@ export function ProductDetailPage({
 }) {
   const { slug } = useParams();
   const store = useStore();
-  const [product, setProduct] = useState<Product | null>(null);
-  const [related, setRelated] = useState<Product[]>([]);
-  const [status, setStatus] = useState<
-    'loading' | 'ready' | 'error' | 'missing'
-  >('loading');
+  const { products } = useStorefrontCatalog();
+  const product = useMemo(
+    () => products.find((item) => item.slug === slug) ?? null,
+    [products, slug],
+  );
+  const related = useMemo(() => {
+    if (!product) {
+      return [];
+    }
+    return products
+      .filter(
+        (item) => item.category === product.category && item.id !== product.id,
+      )
+      .slice(0, 4);
+  }, [product, products]);
   const [color, setColor] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [busy, setBusy] = useState(false);
+  const stockKnown = store.stockStatus === 'ready';
 
-  useEffect(() => {
-    let active = true;
-    if (!slug) {
-      setStatus('missing');
-      return;
-    }
-    setStatus((current) => (current === 'ready' ? current : 'loading'));
-    void getProductBySlug(slug)
-      .then(async (result) => {
-        if (!active) {
-          return;
-        }
-        if (!result) {
-          setStatus('missing');
-          return;
-        }
-        setProduct(result);
-        setColor((current) =>
-          result.variants.some((variant) => variant.colorSlug === current)
-            ? current
-            : (result.variants[0]?.colorSlug ?? ''),
-        );
-        const nextRelated = await getRelatedProducts(result);
-        if (active) {
-          setRelated(nextRelated);
-          setStatus('ready');
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setStatus('error');
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [slug, store.catalogVersion]);
+  const activeColor =
+    product?.variants.some((variant) => variant.colorSlug === color)
+      ? color
+      : (product?.variants[0]?.colorSlug ?? '');
 
   const selected = useMemo(() => {
-    return product?.variants.find((variant) => variant.colorSlug === color);
-  }, [color, product]);
+    return product?.variants.find(
+      (variant) => variant.colorSlug === activeColor,
+    );
+  }, [activeColor, product]);
 
   const colors = product ? uniqueColors(product) : [];
   const selectedImage =
@@ -82,7 +60,7 @@ export function ProductDetailPage({
     '/images/products/fallback.svg';
   const fallbacks = selected?.images.slice(1) ?? [];
 
-  const stock = selected ? store.stockFor(selected.id) : 0;
+  const stock = stockKnown && selected ? store.stockFor(selected.id) : 0;
 
   useEffect(() => {
     if (stock > 0 && quantity > stock) {
@@ -114,23 +92,7 @@ export function ProductDetailPage({
     );
   };
 
-  if (status === 'loading') {
-    return (
-      <main id="main">
-        <p>Loading product…</p>
-      </main>
-    );
-  }
-
-  if (status === 'error') {
-    return (
-      <main id="main">
-        <p className="feedback-error">This product could not be loaded.</p>
-      </main>
-    );
-  }
-
-  if (status === 'missing' || !product) {
+  if (!product) {
     return (
       <main id="main">
         <h1>Product not found</h1>
@@ -155,6 +117,7 @@ export function ProductDetailPage({
           { label: product.name },
         ]}
       />
+      <AvailabilityNotice />
       <div className="pdp">
         <section className="gallery" aria-label="Product images">
           <div className="gallery-main">
@@ -176,9 +139,10 @@ export function ProductDetailPage({
           <p className="muted">{formatStorageLabel(product.spec)}</p>
           <ColorPicker
             options={colors}
-            value={color}
+            value={activeColor}
             onChange={setColor}
             unavailable={(colorSlug) =>
+              stockKnown &&
               !product.variants.some(
                 (variant) =>
                   variant.colorSlug === colorSlug &&
@@ -187,12 +151,16 @@ export function ProductDetailPage({
             }
           />
           {selected ? (
-            <p className={stock <= 3 ? 'status-warn' : 'muted'}>
-              {stock === 0
-                ? 'Out of stock'
-                : stock <= 3
-                  ? `${stock} left`
-                  : `${stock} in stock`}
+            <p className={stockKnown && stock <= 3 ? 'status-warn' : 'muted'}>
+              {!stockKnown
+                ? store.stockStatus === 'error'
+                  ? 'Availability unavailable'
+                  : 'Checking availability'
+                : stock === 0
+                  ? 'Out of stock'
+                  : stock <= 3
+                    ? `${stock} left`
+                    : `${stock} in stock`}
             </p>
           ) : (
             <p className="muted">That color is not offered.</p>
@@ -206,7 +174,7 @@ export function ProductDetailPage({
               max={Math.max(stock, 1)}
               step={1}
               value={quantity}
-              disabled={stock === 0}
+              disabled={!stockKnown || stock === 0}
               onChange={(event) => {
                 const next = Number(event.target.value);
                 if (!Number.isInteger(next) || next < 1) {
@@ -221,10 +189,16 @@ export function ProductDetailPage({
             <button
               type="button"
               className="primary-button"
-              disabled={!selected || stock === 0 || quantity > stock || busy}
+              disabled={!stockKnown || !selected || stock === 0 || quantity > stock || busy}
               onClick={() => void addToCart()}
             >
-              {stock === 0 ? 'Out of stock' : 'Add to cart'}
+              {!stockKnown
+                ? store.stockStatus === 'error'
+                  ? 'Unavailable'
+                  : 'Checking availability'
+                : stock === 0
+                  ? 'Out of stock'
+                  : 'Add to cart'}
             </button>
             <button
               type="button"
@@ -243,10 +217,16 @@ export function ProductDetailPage({
         <button
           type="button"
           className="primary-button"
-          disabled={!selected || stock === 0 || quantity > stock || busy}
+          disabled={!stockKnown || !selected || stock === 0 || quantity > stock || busy}
           onClick={() => void addToCart()}
         >
-          {stock === 0 ? 'Out of stock' : 'Add to cart'}
+          {!stockKnown
+            ? store.stockStatus === 'error'
+              ? 'Unavailable'
+              : 'Checking availability'
+            : stock === 0
+              ? 'Out of stock'
+              : 'Add to cart'}
         </button>
       </div>
       {related.length > 0 ? (

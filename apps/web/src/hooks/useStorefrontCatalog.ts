@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
+import { getTemporaryCatalog } from '../data/catalog.ts';
 import { loadStorefrontCatalog } from '../services/catalogService.ts';
 import { useStore } from '../store/StoreContext.tsx';
 import type { Product } from '../types/store.ts';
 
 export function useStorefrontCatalog(): {
   products: Product[];
-  status: 'loading' | 'ready' | 'error';
+  status: 'preview' | 'ready' | 'error';
 } {
   const { catalogVersion } = useStore();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
-    'loading',
+  const [products, setProducts] = useState<Product[]>(() =>
+    getTemporaryCatalog(),
+  );
+  const [status, setStatus] = useState<'preview' | 'ready' | 'error'>(
+    'preview',
   );
 
   useEffect(() => {
@@ -24,10 +27,13 @@ export function useStorefrontCatalog(): {
         setStatus('ready');
       })
       .catch(() => {
-        if (active) {
-          setProducts([]);
-          setStatus('error');
+        if (!active) {
+          return;
         }
+        setProducts((current) =>
+          current.length > 0 ? current : getTemporaryCatalog(),
+        );
+        setStatus('error');
       });
 
     return () => {

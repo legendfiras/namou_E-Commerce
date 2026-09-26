@@ -9,7 +9,7 @@ export function LoginPage({
 }: {
   onFeedback: (message: string) => void;
 }) {
-  const { signInWithGoogle, session } = useStore();
+  const { signInWithGoogle, session, authStatus, retryStorefront } = useStore();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
@@ -37,26 +37,63 @@ export function LoginPage({
     setError(message);
   }, []);
 
-  if (session) {
+  if (authStatus === 'ready' && session) {
     return <Navigate to={from} replace />;
   }
 
+  const backToCheckout = from.startsWith('/checkout');
+
   return (
-    <main id="main" className="login-card">
-      <div className="login-brand">
-        <BrandLockup size="md" />
-      </div>
-      <h1>Sign in</h1>
-      <p className="muted">
-        Sign in with Google to place a demo order. You can browse the shop
-        without signing in.
-      </p>
-      <GoogleSignInButton onCredential={onCredential} onError={onError} />
-      {busy ? <p>Signing in…</p> : null}
-      {error ? <p className="feedback-error">{error}</p> : null}
-      <p>
-        <Link to="/products">Continue shopping</Link>
-      </p>
+    <main id="main" className="login-page">
+      <section className="login-card" aria-labelledby="login-title">
+        <div className="login-brand">
+          <BrandLockup size="md" />
+        </div>
+        <div className="login-copy">
+          <p className="product-kicker">Account</p>
+          <h1 id="login-title">Welcome to Namou</h1>
+          <p className="login-note">
+            New here? Continue with Google to create your account.
+          </p>
+          <p className="login-note">
+            Returning? Choose the same Google account to sign in.
+          </p>
+        </div>
+        {backToCheckout ? (
+          <p className="notice-box">
+            You’ll return to checkout after you continue.
+          </p>
+        ) : null}
+        {authStatus === 'loading' ? (
+          <p className="status-panel" role="status">
+            Checking your sign-in…
+          </p>
+        ) : null}
+        {authStatus === 'error' ? (
+          <div className="status-panel status-panel-error" role="alert">
+            <p>We could not confirm an existing sign-in.</p>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={retryStorefront}
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
+        {authStatus === 'loading' ? null : (
+          <GoogleSignInButton onCredential={onCredential} onError={onError} />
+        )}
+        {busy ? <p role="status">Signing in…</p> : null}
+        {error ? (
+          <p className="feedback-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <p className="login-alt">
+          <Link to="/products">Continue shopping</Link>
+        </p>
+      </section>
     </main>
   );
 }

@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import {
+  AvailabilityNotice,
+  confirmedStockText,
+} from '../components/layout/AvailabilityNotice.tsx';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs.tsx';
 import { ProductImage } from '../components/product/ProductImage.tsx';
 import { findProduct, findVariant } from '../domain/checkout.ts';
@@ -15,7 +19,8 @@ export function CheckoutPage({
 }) {
   const store = useStore();
   const navigate = useNavigate();
-  const { products, status } = useStorefrontCatalog();
+  const { products } = useStorefrontCatalog();
+  const stockKnown = store.stockStatus === 'ready';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,25 +42,9 @@ export function CheckoutPage({
     0,
   );
   const empty = lines.length === 0;
-  const overStock = lines.some(
-    (line) => line.item.quantity > store.stockFor(line.variant.id),
-  );
-
-  if (status === 'loading') {
-    return (
-      <main id="main">
-        <p>Loading checkout…</p>
-      </main>
-    );
-  }
-
-  if (status === 'error') {
-    return (
-      <main id="main">
-        <p className="feedback-error">The catalog could not be loaded.</p>
-      </main>
-    );
-  }
+  const overStock =
+    stockKnown &&
+    lines.some((line) => line.item.quantity > store.stockFor(line.variant.id));
 
   return (
     <main id="main">
@@ -67,6 +56,7 @@ export function CheckoutPage({
         ]}
       />
       <h1>Checkout</h1>
+      <AvailabilityNotice />
       <p className="notice-box">
         Demo checkout. Placing this order records it for your account and does
         not charge a payment.
@@ -96,14 +86,17 @@ export function CheckoutPage({
                   </p>
                   <p
                     className={
-                      store.stockFor(variant.id) < item.quantity
+                      stockKnown && store.stockFor(variant.id) < item.quantity
                         ? 'feedback-error'
                         : 'muted'
                     }
                   >
-                    {store.stockFor(variant.id) === 0
-                      ? 'Out of stock'
-                      : `${store.stockFor(variant.id)} available`}
+                    {confirmedStockText(
+                      store.stockStatus,
+                      store.stockFor(variant.id),
+                      (stock) =>
+                        stock === 0 ? 'Out of stock' : `${stock} available`,
+                    )}
                   </p>
                 </div>
                 <p>{formatUsd(variant.priceCents * item.quantity)}</p>
@@ -128,7 +121,7 @@ export function CheckoutPage({
             <button
               type="button"
               className="primary-button"
-              disabled={empty || busy || overStock}
+              disabled={empty || busy || overStock || !stockKnown}
               onClick={() => {
                 setBusy(true);
                 setError(null);
@@ -143,7 +136,11 @@ export function CheckoutPage({
                 });
               }}
             >
-              {busy ? 'Placing demo order…' : 'Place demo order'}
+              {busy
+                ? 'Placing demo order…'
+                : !stockKnown
+                  ? 'Checking availability'
+                  : 'Place demo order'}
             </button>
           </aside>
         </div>

@@ -22,8 +22,9 @@ export function ProductCard({
   priority = false,
   onFeedback,
 }: ProductCardProps) {
-  const { isWishlisted, toggleWishlist } = useStore();
-  const saved = isWishlisted(product.id);
+  const { isWishlisted, toggleWishlist, authStatus } = useStore();
+  const accountReady = authStatus === 'ready';
+  const saved = accountReady && isWishlisted(product.id);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const preview =
     product.variants.find((variant) => variant.id === previewId) ?? null;
@@ -55,10 +56,13 @@ export function ProductCard({
           type="button"
           className="icon-button wishlist-button"
           aria-pressed={saved}
+          disabled={!accountReady}
           aria-label={
-            saved
-              ? `Remove ${product.name} from wishlist`
-              : `Add ${product.name} to wishlist`
+            !accountReady
+              ? `Wishlist for ${product.name} is unavailable until your account is checked`
+              : saved
+                ? `Remove ${product.name} from wishlist`
+                : `Add ${product.name} to wishlist`
           }
           onClick={() => {
             void toggleWishlist(product.id).then((result) => {

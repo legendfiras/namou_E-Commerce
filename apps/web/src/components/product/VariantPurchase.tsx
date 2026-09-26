@@ -57,10 +57,15 @@ export function VariantPurchase({
     });
   }, [color, needsColor, needsStorage, product.variants, storage]);
 
-  const stock = variant ? store.stockFor(variant.id) : 0;
-  const everyVariantOut = product.variants.every(
-    (item) => store.stockFor(item.id) <= 0,
-  );
+  const stockKnown = store.stockStatus === 'ready';
+  const stock = stockKnown && variant ? store.stockFor(variant.id) : 0;
+  const everyVariantOut =
+    stockKnown &&
+    product.variants.every((item) => store.stockFor(item.id) <= 0);
+  const availabilityLabel =
+    store.stockStatus === 'error'
+      ? 'Unavailable'
+      : 'Checking availability';
   const storageChoices = storagesFor(product, needsColor ? color : '');
 
   useEffect(() => {
@@ -139,6 +144,8 @@ export function VariantPurchase({
       product={product}
       variant={variant ?? null}
       stock={stock}
+      stockKnown={stockKnown}
+      availabilityLabel={availabilityLabel}
       colors={colors}
       color={color}
       needsColor={needsColor}
@@ -153,7 +160,9 @@ export function VariantPurchase({
       onStorage={chooseStorage}
       onQuantity={setQuantity}
       onAdd={addToCart}
-      stockFor={(variantId) => store.stockFor(variantId)}
+      stockFor={(variantId) =>
+        stockKnown ? store.stockFor(variantId) : 1
+      }
     />
   );
 
@@ -163,10 +172,14 @@ export function VariantPurchase({
         <button
           type="button"
           className="primary-button card-add-button"
-          disabled={everyVariantOut}
+          disabled={!stockKnown || everyVariantOut}
           onClick={() => setOpen(true)}
         >
-          {everyVariantOut ? 'Out of stock' : 'Add to cart'}
+          {!stockKnown
+            ? availabilityLabel
+            : everyVariantOut
+              ? 'Out of stock'
+              : 'Add to cart'}
         </button>
         <Drawer
           open={open}
@@ -175,9 +188,11 @@ export function VariantPurchase({
           onClose={() => setOpen(false)}
         >
           <p className="muted sheet-intro" id={`${qtyId}-intro`}>
-            {needsColor
-              ? 'Choose a finish and quantity. Out-of-stock finishes stay disabled.'
-              : 'Choose a quantity. The price and stock shown are for this finish.'}
+            {!stockKnown
+              ? 'Availability is still being checked.'
+              : needsColor
+                ? 'Choose a finish and quantity. Out-of-stock finishes stay disabled.'
+                : 'Choose a quantity. The price and stock shown are for this finish.'}
           </p>
           {fields}
         </Drawer>
@@ -192,6 +207,8 @@ function VariantFields({
   product,
   variant,
   stock,
+  stockKnown,
+  availabilityLabel,
   colors,
   color,
   needsColor,
@@ -211,6 +228,8 @@ function VariantFields({
   product: Product;
   variant: ProductVariant | null;
   stock: number;
+  stockKnown: boolean;
+  availabilityLabel: string;
   colors: ProductVariant[];
   color: string;
   needsColor: boolean;
@@ -229,7 +248,13 @@ function VariantFields({
 }) {
   const image = variant?.images[0] ?? product.variants[0]?.images[0] ?? '/images/products/fallback.svg';
   const fallbacks = variant?.images.slice(1) ?? product.variants[0]?.images.slice(1) ?? [];
-  const canAdd = Boolean(variant) && stock > 0 && quantity >= 1 && quantity <= stock && !busy;
+  const canAdd =
+    stockKnown &&
+    Boolean(variant) &&
+    stock > 0 &&
+    quantity >= 1 &&
+    quantity <= stock &&
+    !busy;
 
   return (
     <div className="variant-fields">
@@ -250,12 +275,16 @@ function VariantFields({
           <p className="variant-preview-price">
             {variant ? formatUsd(variant.priceCents) : 'Price appears after you choose'}
           </p>
-          <p className={variant && stock <= 3 ? 'status-warn' : 'muted'}>
-            {!variant
-              ? 'Stock appears after you choose'
-              : stock === 0
-                ? 'Out of stock'
-                : `${stock} in stock`}
+          <p className={stockKnown && variant && stock <= 3 ? 'status-warn' : 'muted'}>
+            {!stockKnown
+              ? availabilityLabel === 'Unavailable'
+                ? 'Availability unavailable'
+                : 'Checking availability'
+              : !variant
+                ? 'Stock appears after you choose'
+                : stock === 0
+                  ? 'Out of stock'
+                  : `${stock} in stock`}
           </p>
         </div>
       </div>
@@ -311,7 +340,7 @@ function VariantFields({
           max={Math.max(stock, 1)}
           step={1}
           value={quantity}
-          disabled={!variant || stock === 0}
+          disabled={!stockKnown || !variant || stock === 0}
           onChange={(event) => {
             const next = Number(event.target.value);
             if (!Number.isInteger(next) || next < 1) {
@@ -330,11 +359,13 @@ function VariantFields({
       >
         {busy
           ? 'Adding…'
-          : !variant
-            ? 'Choose a finish'
-            : everyVariantOut || stock === 0
-              ? 'Out of stock'
-              : 'Add to cart'}
+          : !stockKnown
+            ? availabilityLabel
+            : !variant
+              ? 'Choose a finish'
+              : everyVariantOut || stock === 0
+                ? 'Out of stock'
+                : 'Add to cart'}
       </button>
     </div>
   );

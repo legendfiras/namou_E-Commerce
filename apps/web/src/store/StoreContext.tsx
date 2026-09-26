@@ -41,8 +41,13 @@ import {
   STORAGE_VERSION,
 } from './persistence.ts';
 
+export type StoreConnectionStatus = 'loading' | 'ready' | 'error';
+
 type StoreContextValue = {
   session: Session | null;
+  authStatus: StoreConnectionStatus;
+  stockStatus: StoreConnectionStatus;
+  retryStorefront: () => void;
   cart: CartItem[];
   wishlist: WishlistItem[];
   orders: Order[];
@@ -97,8 +102,11 @@ function persistUser(
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [authReady, setAuthReady] = useState(false);
-  const [stockReady, setStockReady] = useState(false);
+  const [authStatus, setAuthStatus] =
+    useState<StoreConnectionStatus>('loading');
+  const [authAttempt, setAuthAttempt] = useState(0);
+  const [stockStatus, setStockStatus] =
+    useState<StoreConnectionStatus>('loading');
   const [catalogVersion, setCatalogVersion] = useState(0);
   const [inventory, setInventory] = useState<InventoryMap>({});
   const checkoutAttempt = useRef<{ signature: string; key: string } | null>(
@@ -118,20 +126,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
 
+    setStockStatus((current) => (current === 'ready' ? current : 'loading'));
     void loadStorefrontCatalog()
       .then((products) => {
-        if (active) {
-          setInventory(seedInventory(products));
+        if (!active) {
+          return;
         }
+        setInventory(seedInventory(products));
+        setStockStatus('ready');
       })
       .catch(() => {
         if (active) {
-          setInventory({});
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setStockReady(true);
+          setStockStatus('error');
         }
       });
 
@@ -155,31 +161,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           setWishlist(record.wishlist);
           setOrders(record.orders);
         } else {
+          setSession(null);
           const record = loadUserRecord(GUEST_ACCOUNT);
           setCart(record.cart);
           setWishlist(record.wishlist);
           setOrders(record.orders);
         }
+        setAuthStatus('ready');
       })
       .catch(() => {
         if (!active) {
           return;
         }
-        const record = loadUserRecord(GUEST_ACCOUNT);
-        setCart(record.cart);
-        setWishlist(record.wishlist);
-        setOrders(record.orders);
-      })
-      .finally(() => {
-        if (active) {
-          setAuthReady(true);
-        }
+        setSession(null);
+        setCart([]);
+        setWishlist([]);
+        setOrders([]);
+        setAuthStatus('error');
       });
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [authAttempt]);
 
   const signInWithGoogle = useCallback(
     async (credential: string): Promise<ActionResult> => {
@@ -197,6 +201,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
       setSession(result.session);
       loadUser(result.session);
+      setAuthStatus('ready');
       return { ok: true };
     },
     [loadUser],
@@ -214,6 +219,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       variantId: string,
       quantity: number,
     ): Promise<ActionResult> => {
+      if (authStatus !== 'ready') {
+        return { ok: false, message: 'Your account is still loading.' };
+      }
+      if (stockStatus !== 'ready') {
+        return {
+          ok: false,
+          message: 'Availability is still being checked.',
+        };
+      }
       await mockWait();
       const result = addCartItem(
         cart,
@@ -229,11 +243,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       persistUser(session, result.items, wishlist, orders);
       return { ok: true };
     },
-    [cart, inventory, orders, session, wishlist],
+    [authStatus, cart, inventory, orders, session, stockStatus, wishlist],
   );
 
   const updateQuantity = useCallback(
     async (variantId: string, quantity: number): Promise<ActionResult> => {
+      if (authStatus !== 'ready' || stockStatus !== 'ready') {
+        return {
+          ok: false,
+          message: 'Availability is still being checked.',
+        };
+      }
       await mockWait();
       const result = updateCartQuantity(
         cart,
@@ -248,17 +268,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       persistUser(session, result.items, wishlist, orders);
       return { ok: true };
     },
-    [cart, inventory, orders, session, wishlist],
+    [authStatus, cart, inventory, orders, session, stockStatus, wishlist],
   );
 
   const removeFromCart = useCallback(
     async (variantId: string) => {
+      if (authStatus !== 'ready') {
+        return;
+      }
       await mockWait();
       const next = removeCartItem(cart, variantId);
       setCart(next);
       persistUser(session, next, wishlist, orders);
     },
-    [cart, orders, session, wishlist],
+    [authStatus, cart, orders, session, wishlist],
   );
 
   const changeVariant = useCallback(
@@ -267,6 +290,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toVariantId: string,
       toProductId: string,
     ): Promise<ActionResult> => {
+      if (authStatus !== 'ready' || stockStatus !== 'ready') {
+        return {
+          ok: false,
+          message: 'Availability is still being checked.',
+        };
+      }
       await mockWait();
       const result = changeCartVariant(
         cart,
@@ -282,11 +311,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       persistUser(session, result.items, wishlist, orders);
       return { ok: true };
     },
-    [cart, inventory, orders, session, wishlist],
+    [authStatus, cart, inventory, orders, session, stockStatus, wishlist],
   );
 
   const toggleWishlist = useCallback(
     async (productId: string) => {
+      if (authStatus !== 'ready') {
+        return { added: false };
+      }
       await mockWait();
       const exists = wishlist.some((item) => item.productId === productId);
       const next = exists
@@ -296,17 +328,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       persistUser(session, cart, next, orders);
       return { added: !exists };
     },
-    [cart, orders, session, wishlist],
+    [authStatus, cart, orders, session, wishlist],
   );
 
   const removeFromWishlist = useCallback(
     async (productId: string) => {
+      if (authStatus !== 'ready') {
+        return;
+      }
       await mockWait();
       const next = wishlist.filter((item) => item.productId !== productId);
       setWishlist(next);
       persistUser(session, cart, next, orders);
     },
-    [cart, orders, session, wishlist],
+    [authStatus, cart, orders, session, wishlist],
   );
 
   const isWishlisted = useCallback(
@@ -320,11 +355,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setCatalogVersion((version) => version + 1);
   }, []);
 
+  const retryStorefront = useCallback(() => {
+    if (stockStatus !== 'ready') {
+      refreshCatalogStock();
+    }
+    if (authStatus !== 'ready') {
+      setAuthStatus('loading');
+      setCart([]);
+      setWishlist([]);
+      setOrders([]);
+      setSession(null);
+      setAuthAttempt((attempt) => attempt + 1);
+    }
+  }, [authStatus, refreshCatalogStock, stockStatus]);
+
   const checkout = useCallback(async () => {
-    if (!session) {
+    if (authStatus !== 'ready' || !session) {
       return {
         ok: false as const,
         message: 'Sign in with Google to place a demo order.',
+      };
+    }
+    if (stockStatus !== 'ready') {
+      return {
+        ok: false as const,
+        message: 'Availability is still being checked.',
       };
     }
 
@@ -353,7 +408,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     persistUser(session, [], wishlist, orders);
     refreshCatalogStock();
     return { ok: true as const, order: result.order };
-  }, [cart, orders, refreshCatalogStock, session, wishlist]);
+  }, [authStatus, cart, orders, refreshCatalogStock, session, stockStatus, wishlist]);
 
   const stockFor = useCallback(
     (variantId: string) => inventory[variantId] ?? 0,
@@ -374,6 +429,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo(
     () => ({
       session,
+      authStatus,
+      stockStatus,
+      retryStorefront,
       cart,
       wishlist,
       orders,
@@ -394,6 +452,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }),
     [
       addToCart,
+      authStatus,
       cart,
       changeVariant,
       catalogVersion,
@@ -404,23 +463,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeFromCart,
       removeFromWishlist,
       resetDemo,
+      retryStorefront,
       session,
       signInWithGoogle,
       signOut,
       stockFor,
+      stockStatus,
       toggleWishlist,
       updateQuantity,
       wishlist,
     ],
   );
-
-  if (!authReady || !stockReady) {
-    return (
-      <p role="status" aria-live="polite">
-        Loading…
-      </p>
-    );
-  }
 
   return (
     <StoreContext.Provider value={value}>{children}</StoreContext.Provider>

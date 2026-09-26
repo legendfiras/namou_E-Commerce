@@ -16,7 +16,7 @@ type GoogleAccountsId = {
       type?: 'standard';
       theme?: 'outline';
       size?: 'large';
-      text?: 'signin_with';
+      text?: 'signin_with' | 'continue_with';
       width?: number;
     },
   ) => void;
@@ -107,12 +107,13 @@ export function GoogleSignInButton({
           },
         });
         host.replaceChildren();
+        const measured = Math.floor(host.getBoundingClientRect().width);
         window.google.accounts.id.renderButton(host, {
           type: 'standard',
           theme: 'outline',
           size: 'large',
-          text: 'signin_with',
-          width: 320,
+          text: 'continue_with',
+          width: Math.max(220, measured || 320),
         });
       })
       .catch(() => {
@@ -140,5 +141,5 @@ export function GoogleSignInButton({
     return null;
   }
 
-  return <div ref={hostRef} />;
+  return <div className="login-google" ref={hostRef} />;
 }

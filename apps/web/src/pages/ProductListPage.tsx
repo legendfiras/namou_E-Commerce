@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { AvailabilityNotice } from '../components/layout/AvailabilityNotice.tsx';
 import { ProductCard } from '../components/product/ProductCard.tsx';
 import { SearchField } from '../components/search/SearchField.tsx';
 import {
   categoryLabel,
+  filterProducts,
   parseCatalogSearchParams,
 } from '../domain/catalogQuery.ts';
-import { listProducts } from '../services/catalogService.ts';
-import type { Product, ProductCategory } from '../types/store.ts';
+import { useStorefrontCatalog } from '../hooks/useStorefrontCatalog.ts';
+import type { ProductCategory } from '../types/store.ts';
 
 const categories: ProductCategory[] = ['iphone', 'airpods', 'mac', 'ipad'];
 
@@ -23,31 +25,11 @@ export function ProductListPage({
     () => parseCatalogSearchParams(new URLSearchParams(queryKey)),
     [queryKey],
   );
-  const [products, setProducts] = useState<Product[]>([]);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>(
-    'loading',
+  const { products: catalog } = useStorefrontCatalog();
+  const products = useMemo(
+    () => filterProducts(catalog, query),
+    [catalog, query],
   );
-
-  useEffect(() => {
-    let active = true;
-    setStatus('loading');
-    void listProducts(query)
-      .then((result) => {
-        if (!active) {
-          return;
-        }
-        setProducts(result);
-        setStatus('ready');
-      })
-      .catch(() => {
-        if (active) {
-          setStatus('error');
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [query]);
 
   const setList = (next: URLSearchParams) => {
     next.delete('storage');
@@ -142,7 +124,7 @@ export function ProductListPage({
       </div>
 
       <div className="listing-toolbar">
-        <p>{status === 'ready' ? `${products.length} results` : ' '}</p>
+        <p>{`${products.length} results`}</p>
         {hasActiveFilters ? (
           <button type="button" className="ghost-button" onClick={clearAll}>
             Clear filters
@@ -151,11 +133,8 @@ export function ProductListPage({
       </div>
 
       <section>
-        {status === 'loading' ? <p>Loading products…</p> : null}
-        {status === 'error' ? (
-          <p className="feedback-error">The catalog could not be loaded.</p>
-        ) : null}
-        {status === 'ready' && products.length === 0 ? (
+        <AvailabilityNotice />
+        {products.length === 0 ? (
           <div className="empty-state">
             <h2>No products match those filters</h2>
             <p className="muted">Try another category or clear search.</p>
@@ -168,7 +147,7 @@ export function ProductListPage({
             </button>
           </div>
         ) : null}
-        {status === 'ready' && products.length > 0 ? (
+        {products.length > 0 ? (
           <div className="product-grid catalog-grid">
             {products.map((product) => (
               <ProductCard

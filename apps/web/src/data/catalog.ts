@@ -451,6 +451,24 @@ export const featuredProductSlugs = [
   'ipad-pro',
 ] as const;
 
+const localProductPhoto = /^\/images\/products\/[^/]+\/[^/]+\.jpe?g$/i;
+
 export function getSeedCatalog(): Product[] {
   return products;
+}
+
+export function getTemporaryCatalog(): Product[] {
+  return products.map((product) => ({
+    ...product,
+    variants: product.variants.map((variant) => {
+      const images = variant.images.filter(
+        (image) => !localProductPhoto.test(image),
+      );
+      return {
+        ...variant,
+        images:
+          images.length > 0 ? images : ['/images/products/fallback.svg'],
+      };
+    }),
+  }));
 }

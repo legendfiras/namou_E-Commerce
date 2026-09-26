@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  AvailabilityNotice,
+  confirmedStockText,
+} from '../components/layout/AvailabilityNotice.tsx';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs.tsx';
 import { ColorPicker } from '../components/product/ColorPicker.tsx';
 import { ProductImage } from '../components/product/ProductImage.tsx';
@@ -15,8 +19,9 @@ export function CartPage({
   onFeedback: (message: string) => void;
 }) {
   const store = useStore();
-  const { session } = store;
-  const { products, status } = useStorefrontCatalog();
+  const { session, authStatus, stockStatus, retryStorefront } = store;
+  const { products } = useStorefrontCatalog();
+  const stockKnown = stockStatus === 'ready';
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const lines = store.cart
@@ -37,18 +42,29 @@ export function CartPage({
     0,
   );
 
-  if (status === 'loading') {
+  if (authStatus === 'loading') {
     return (
       <main id="main">
-        <p>Loading cart…</p>
+        <h1>Cart</h1>
+        <p className="status-panel" role="status">
+          Checking your saved cart…
+        </p>
       </main>
     );
   }
 
-  if (status === 'error') {
+  if (authStatus === 'error') {
     return (
-      <main id="main">
-        <p className="feedback-error">The catalog could not be loaded.</p>
+      <main id="main" className="empty-state">
+        <h1>Cart</h1>
+        <p>Your saved cart could not be loaded.</p>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={retryStorefront}
+        >
+          Try again
+        </button>
       </main>
     );
   }
@@ -74,6 +90,7 @@ export function CartPage({
     <main id="main">
       <Breadcrumbs items={[{ label: 'Home', to: '/' }, { label: 'Cart' }]} />
       <h1>Cart</h1>
+      <AvailabilityNotice />
       <div className="checkout-grid">
         <section className="cart-list">
           {lines.map(({ item, product, variant }) => {
@@ -90,10 +107,13 @@ export function CartPage({
                   <p className="muted">
                     {variant.color} · {formatStorageLabel(variant.storage)}
                   </p>
-                  <p className={store.stockFor(variant.id) <= 3 ? 'status-warn' : 'muted'}>
-                    {store.stockFor(variant.id) === 0
-                      ? 'Out of stock'
-                      : `${store.stockFor(variant.id)} in stock`}
+                  <p className={stockKnown && store.stockFor(variant.id) <= 3 ? 'status-warn' : 'muted'}>
+                    {confirmedStockText(
+                      stockStatus,
+                      store.stockFor(variant.id),
+                      (stock) =>
+                        stock === 0 ? 'Out of stock' : `${stock} in stock`,
+                    )}
                   </p>
                   <p>{formatUsd(variant.priceCents)}</p>
                   {colors.length > 1 ? (
@@ -118,6 +138,9 @@ export function CartPage({
                           });
                       }}
                       unavailable={(colorSlug) => {
+                        if (!stockKnown) {
+                          return false;
+                        }
                         const option = product.variants.find(
                           (candidate) => candidate.colorSlug === colorSlug,
                         );
@@ -130,10 +153,11 @@ export function CartPage({
                     <input
                       type="number"
                       min={1}
-                      max={Math.max(store.stockFor(variant.id), 1)}
+                      max={Math.max(stockKnown ? store.stockFor(variant.id) : item.quantity, 1)}
                       step={1}
                       value={item.quantity}
                       disabled={
+                        !stockKnown ||
                         busyId === item.variantId ||
                         store.stockFor(variant.id) === 0
                       }
