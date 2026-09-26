@@ -34,22 +34,32 @@ function loadImageUrls(): Record<string, string> {
 
 const imageUrls = loadImageUrls();
 
-function variantImagePaths(productId: string, colorSlug: string): string[] {
-  if (!productId.startsWith('iphone-')) {
-    return [
-      `/images/products/${productId}/${colorSlug}.jpg`,
-      `/images/products/${colorSlug}.svg`,
-      '/images/products/fallback.svg',
-    ];
-  }
+function usesUploadedPhoto(productId: string): boolean {
+  return (
+    productId.startsWith('airpods-') ||
+    productId.startsWith('macbook-air-') ||
+    productId.startsWith('ipad-')
+  );
+}
 
+function variantImagePaths(productId: string, colorSlug: string): string[] {
   const key = `${productId}/${colorSlug}.jpg`;
   const url = imageUrls[key];
-  if (!url) {
-    throw new Error(`Missing R2 image for ${key}.`);
+  const svg = `/images/products/${colorSlug}.svg`;
+  const fallback = '/images/products/fallback.svg';
+
+  if (productId.startsWith('iphone-')) {
+    if (!url) {
+      throw new Error(`Missing R2 image for ${key}.`);
+    }
+    return [url];
   }
 
-  return [url];
+  if (usesUploadedPhoto(productId) && url) {
+    return [url, svg, fallback];
+  }
+
+  return [`/images/products/${key}`, svg, fallback];
 }
 
 function variants(

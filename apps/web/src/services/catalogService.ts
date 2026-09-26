@@ -1,4 +1,5 @@
 import { featuredProductSlugs } from '../data/catalog.ts';
+import { productPhotoList } from '../lib/images.ts';
 import { filterProducts } from '../domain/catalogQuery.ts';
 import type {
   CatalogQuery,
@@ -106,7 +107,7 @@ function copyProduct(product: Product): Product {
     ...product,
     variants: product.variants.map((variant) => ({
       ...variant,
-      images: [...variant.images],
+      images: productPhotoList(product.slug, variant.colorSlug, variant.images),
     })),
   };
 }
