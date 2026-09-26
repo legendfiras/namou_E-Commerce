@@ -1,0 +1,32 @@
+{
+  "name": "namou-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "seed": "tsx src/seed.ts",
+    "migrate-iphone-images": "tsx src/migrateIphoneImages.ts",
+    "upload-images": "tsx scripts/uploadImages.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/app.test.ts src/catalogQuery.test.ts src/orders.test.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "google-auth-library": "^11.1.0",
+    "mongoose": "^9.10.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.23",
+    "@types/node": "^24.13.3",
+    "@types/supertest": "^6.0.3",
+    "mongodb-memory-server": "^11.3.0",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.5",
+    "typescript": "~6.0.2"
+  }
+}

@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+coverage/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment secrets (keep .env.example)
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local product JPG photos. Copies live on Cloudflare R2 and must not be published.
+apps/web/public/images/products/**/*.jpg
+apps/web/public/images/products/**/*.jpeg
+apps/web/public/images/products/iphone-13/
+apps/web/public/images/products/iphone-13-mini/
+apps/web/public/images/products/iphone-13-pro/
+apps/web/public/images/products/iphone-13-pro-max/
+apps/web/public/images/products/iphone-14/
+apps/web/public/images/products/iphone-14-plus/
+apps/web/public/images/products/iphone-14-pro/
+apps/web/public/images/products/iphone-14-pro-max/
+apps/web/public/images/products/iphone-15/
+apps/web/public/images/products/iphone-15-plus/
+apps/web/public/images/products/iphone-15-pro/
+apps/web/public/images/products/iphone-15-pro-max/
+apps/web/public/images/products/iphone-16/
+apps/web/public/images/products/iphone-16-plus/
+apps/web/public/images/products/iphone-16-pro/
