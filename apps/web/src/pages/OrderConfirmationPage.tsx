@@ -132,15 +132,21 @@ export function OrderConfirmationPage() {
               src={item.image}
               alt={`${item.productName} ${item.color}`}
             />
-            <div>
-              <h2>{item.productName}</h2>
+            <div className="cart-line-copy">
+              <div className="cart-line-head">
+                <h2>{item.productName}</h2>
+                <p className="cart-line-total">
+                  {formatUsd(item.unitPriceCents * item.quantity)}
+                </p>
+              </div>
               <p className="muted">
                 {item.color} · {formatStorageLabel(item.storage)} · Qty{' '}
                 {item.quantity}
+                {item.quantity > 1
+                  ? ` · ${formatUsd(item.unitPriceCents)} each`
+                  : ''}
               </p>
-              <p>{formatUsd(item.unitPriceCents)}</p>
             </div>
-            <p>{formatUsd(item.unitPriceCents * item.quantity)}</p>
           </article>
         ))}
       </section>

@@ -1,16 +1,18 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { safeReturnPath } from '../../store/pendingAction.ts';
 import { useStore } from '../../store/StoreContext.tsx';
 
 export function RequireAuth() {
   const { session, authStatus, retryStorefront } = useStore();
   const location = useLocation();
+  const returnTo = safeReturnPath(location.pathname + location.search);
 
   if (authStatus === 'loading') {
     return (
       <main id="main" className="empty-state">
         <h1>Checking your account</h1>
         <p className="status-panel" role="status">
-          Checkout stays locked until sign-in is confirmed.
+          Cart, wishlist, checkout, and orders open after sign-in is confirmed.
         </p>
       </main>
     );
@@ -21,8 +23,8 @@ export function RequireAuth() {
       <main id="main" className="empty-state">
         <h1>We could not confirm your account</h1>
         <p>
-          The store could not reach the server, so checkout and orders stay
-          locked. Your saved cart was not opened.
+          The store could not reach the server, so cart, wishlist, checkout,
+          and orders stay closed.
         </p>
         <button
           type="button"
@@ -38,7 +40,7 @@ export function RequireAuth() {
   if (!session) {
     return (
       <Navigate
-        to={`/login?from=${encodeURIComponent(location.pathname + location.search)}`}
+        to={`/login?from=${encodeURIComponent(returnTo)}`}
         replace
       />
     );

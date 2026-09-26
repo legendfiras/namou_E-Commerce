@@ -78,8 +78,13 @@ export function CheckoutPage({
                   fallbacks={variant.images.slice(1)}
                   alt={`${product.name} ${variant.color}`}
                 />
-                <div>
-                  <h2>{product.name}</h2>
+                <div className="cart-line-copy">
+                  <div className="cart-line-head">
+                    <h2>{product.name}</h2>
+                    <p className="cart-line-total">
+                      {formatUsd(variant.priceCents * item.quantity)}
+                    </p>
+                  </div>
                   <p className="muted">
                     {variant.color} · {formatStorageLabel(variant.storage)} ·
                     Qty {item.quantity}
@@ -99,7 +104,6 @@ export function CheckoutPage({
                     )}
                   </p>
                 </div>
-                <p>{formatUsd(variant.priceCents * item.quantity)}</p>
               </article>
             ))}
           </section>

@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
-    "test": "tsx --test src/domain/cart.test.ts src/domain/catalogQuery.test.ts src/data/catalog.test.ts src/store/persistence.test.ts",
+    "test": "tsx --test src/domain/cart.test.ts src/domain/catalogQuery.test.ts src/data/catalog.test.ts src/store/persistence.test.ts src/store/pendingAction.test.ts",
     "preview": "vite preview",
     "images:fetch": "node scripts/fetch-product-images.mjs",
     "images:flatten": "node scripts/flatten-product-images.mjs",

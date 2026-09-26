@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Drawer } from '../ui/Drawer.tsx';
 import {
   formatStorageLabel,
@@ -6,6 +7,7 @@ import {
 } from '../../domain/catalogQuery.ts';
 import { formatUsd } from '../../domain/money.ts';
 import { useMediaQuery } from '../../hooks/useMediaQuery.ts';
+import { savePendingAction } from '../../store/pendingAction.ts';
 import { useStore } from '../../store/StoreContext.tsx';
 import type { Product, ProductVariant } from '../../types/store.ts';
 import { ColorPicker } from './ColorPicker.tsx';
@@ -30,6 +32,8 @@ export function VariantPurchase({
   onPreview,
 }: VariantPurchaseProps) {
   const store = useStore();
+  const navigate = useNavigate();
+  const location = useLocation();
   const isPhone = useMediaQuery('(max-width: 767px)');
   const [open, setOpen] = useState(false);
   const colors = uniqueColors(product);
@@ -114,11 +118,35 @@ export function VariantPurchase({
   };
 
   const addToCart = () => {
+    if (store.authStatus === 'loading') {
+      onFeedback('Checking your account…');
+      return;
+    }
+    if (store.authStatus === 'error') {
+      onFeedback(
+        'We could not confirm your account. Try again before adding this item.',
+      );
+      return;
+    }
     if (!variant || stock <= 0 || quantity > stock) {
       onFeedback(
         variant
           ? `${product.name} in ${variant.color} is out of stock.`
           : `Choose a finish for ${product.name} before adding it to the cart.`,
+      );
+      return;
+    }
+    if (!store.session) {
+      savePendingAction({
+        type: 'add-to-cart',
+        productId: product.id,
+        variantId: variant.id,
+        productName: product.name,
+        color: variant.color,
+        quantity,
+      });
+      navigate(
+        `/login?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`,
       );
       return;
     }
@@ -172,7 +200,7 @@ export function VariantPurchase({
         <button
           type="button"
           className="primary-button card-add-button"
-          disabled={!stockKnown || everyVariantOut}
+          disabled={store.authStatus === 'loading' || !stockKnown || everyVariantOut}
           onClick={() => setOpen(true)}
         >
           {!stockKnown

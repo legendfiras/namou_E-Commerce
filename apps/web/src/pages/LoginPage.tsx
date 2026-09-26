@@ -1,7 +1,12 @@
-import { useCallback, useState } from 'react';
-import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { GoogleSignInButton } from '../components/auth/GoogleSignInButton.tsx';
 import { BrandLockup } from '../components/layout/BrandLockup.tsx';
+import {
+  clearPendingAction,
+  peekPendingAction,
+  safeReturnPath,
+} from '../store/pendingAction.ts';
 import { useStore } from '../store/StoreContext.tsx';
 
 export function LoginPage({
@@ -9,12 +14,50 @@ export function LoginPage({
 }: {
   onFeedback: (message: string) => void;
 }) {
-  const { signInWithGoogle, session, authStatus, retryStorefront } = useStore();
+  const {
+    signInWithGoogle,
+    fulfillPendingAction,
+    session,
+    authStatus,
+    stockStatus,
+    retryStorefront,
+  } = useStore();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const from = params.get('from') || '/products';
+  const finished = useRef(false);
+  const from = safeReturnPath(params.get('from'));
+  const pending = peekPendingAction();
+
+  useEffect(() => {
+    if (authStatus !== 'ready' || !session || finished.current) {
+      return;
+    }
+    const waitingOnStock =
+      peekPendingAction()?.type === 'add-to-cart' && stockStatus === 'loading';
+    if (waitingOnStock) {
+      return;
+    }
+    finished.current = true;
+    const email = session.email;
+    void fulfillPendingAction(email).then((message) => {
+      if (message) {
+        onFeedback(message);
+      } else {
+        onFeedback('Signed in.');
+      }
+      navigate(from, { replace: true });
+    });
+  }, [
+    authStatus,
+    from,
+    fulfillPendingAction,
+    navigate,
+    onFeedback,
+    session,
+    stockStatus,
+  ]);
 
   const onCredential = useCallback(
     (credential: string) => {
@@ -24,21 +67,31 @@ export function LoginPage({
         setBusy(false);
         if (!result.ok) {
           setError(result.message);
-          return;
         }
-        onFeedback('Signed in.');
-        navigate(from, { replace: true });
       });
     },
-    [from, navigate, onFeedback, signInWithGoogle],
+    [signInWithGoogle],
   );
 
   const onError = useCallback((message: string) => {
     setError(message);
   }, []);
 
-  if (authStatus === 'ready' && session) {
-    return <Navigate to={from} replace />;
+  const cancel = () => {
+    clearPendingAction();
+  };
+
+  if (authStatus === 'loading' || (authStatus === 'ready' && session)) {
+    return (
+      <main id="main" className="login-page">
+        <section className="login-card" aria-labelledby="login-title">
+          <h1 id="login-title">Welcome to Namou</h1>
+          <p className="status-panel" role="status">
+            {session ? 'Finishing sign-in…' : 'Checking your sign-in…'}
+          </p>
+        </section>
+      </main>
+    );
   }
 
   const backToCheckout = from.startsWith('/checkout');
@@ -59,14 +112,21 @@ export function LoginPage({
             Returning? Choose the same Google account to sign in.
           </p>
         </div>
+        {pending?.type === 'add-to-cart' ? (
+          <p className="notice-box">
+            After you continue, {pending.productName} in {pending.color} is
+            added to your cart and you return to the page you were on.
+          </p>
+        ) : null}
+        {pending?.type === 'add-to-wishlist' ? (
+          <p className="notice-box">
+            After you continue, {pending.productName} is saved to your wishlist
+            and you return to the page you were on.
+          </p>
+        ) : null}
         {backToCheckout ? (
           <p className="notice-box">
             You’ll return to checkout after you continue.
-          </p>
-        ) : null}
-        {authStatus === 'loading' ? (
-          <p className="status-panel" role="status">
-            Checking your sign-in…
           </p>
         ) : null}
         {authStatus === 'error' ? (
@@ -81,9 +141,7 @@ export function LoginPage({
             </button>
           </div>
         ) : null}
-        {authStatus === 'loading' ? null : (
-          <GoogleSignInButton onCredential={onCredential} onError={onError} />
-        )}
+        <GoogleSignInButton onCredential={onCredential} onError={onError} />
         {busy ? <p role="status">Signing in…</p> : null}
         {error ? (
           <p className="feedback-error" role="alert">
@@ -91,7 +149,9 @@ export function LoginPage({
           </p>
         ) : null}
         <p className="login-alt">
-          <Link to="/products">Continue shopping</Link>
+          <Link to="/products" onClick={cancel}>
+            Continue shopping
+          </Link>
         </p>
       </section>
     </main>

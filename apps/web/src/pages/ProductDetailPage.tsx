@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AvailabilityNotice } from '../components/layout/AvailabilityNotice.tsx';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs.tsx';
 import { ColorPicker } from '../components/product/ColorPicker.tsx';
@@ -12,6 +12,7 @@ import {
 } from '../domain/catalogQuery.ts';
 import { formatUsd } from '../domain/money.ts';
 import { useStorefrontCatalog } from '../hooks/useStorefrontCatalog.ts';
+import { savePendingAction } from '../store/pendingAction.ts';
 import { useStore } from '../store/StoreContext.tsx';
 import type { ProductVariant } from '../types/store.ts';
 
@@ -21,6 +22,8 @@ export function ProductDetailPage({
   onFeedback: (message: string) => void;
 }) {
   const { slug } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const store = useStore();
   const { products } = useStorefrontCatalog();
   const product = useMemo(
@@ -68,8 +71,44 @@ export function ProductDetailPage({
     }
   }, [quantity, stock]);
 
+  const returnToLogin = () => {
+    navigate(
+      `/login?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`,
+    );
+  };
+
   const addToCart = async () => {
     if (!product || !selected) {
+      return;
+    }
+    if (store.authStatus === 'loading') {
+      onFeedback('Checking your account…');
+      return;
+    }
+    if (store.authStatus === 'error') {
+      onFeedback(
+        'We could not confirm your account. Try again before adding this item.',
+      );
+      return;
+    }
+    if (!stockKnown || stock <= 0 || quantity > stock) {
+      onFeedback(
+        stockKnown && stock <= 0
+          ? `${product.name} in ${selected.color} is out of stock.`
+          : 'Availability is still being checked.',
+      );
+      return;
+    }
+    if (!store.session) {
+      savePendingAction({
+        type: 'add-to-cart',
+        productId: product.id,
+        variantId: selected.id,
+        productName: product.name,
+        color: selected.color,
+        quantity,
+      });
+      returnToLogin();
       return;
     }
     setBusy(true);
@@ -80,6 +119,25 @@ export function ProductDetailPage({
 
   const addToWishlist = async () => {
     if (!product) {
+      return;
+    }
+    if (store.authStatus === 'loading') {
+      onFeedback('Checking your account…');
+      return;
+    }
+    if (store.authStatus === 'error') {
+      onFeedback(
+        'We could not confirm your account. Try again before saving this item.',
+      );
+      return;
+    }
+    if (!store.session) {
+      savePendingAction({
+        type: 'add-to-wishlist',
+        productId: product.id,
+        productName: product.name,
+      });
+      returnToLogin();
       return;
     }
     setBusy(true);
@@ -189,7 +247,14 @@ export function ProductDetailPage({
             <button
               type="button"
               className="primary-button"
-              disabled={!stockKnown || !selected || stock === 0 || quantity > stock || busy}
+              disabled={
+                store.authStatus === 'loading' ||
+                !stockKnown ||
+                !selected ||
+                stock === 0 ||
+                quantity > stock ||
+                busy
+              }
               onClick={() => void addToCart()}
             >
               {!stockKnown
@@ -203,7 +268,7 @@ export function ProductDetailPage({
             <button
               type="button"
               className="secondary-button"
-              disabled={busy}
+              disabled={busy || store.authStatus === 'loading'}
               onClick={() => void addToWishlist()}
             >
               {store.isWishlisted(product.id)
@@ -217,7 +282,14 @@ export function ProductDetailPage({
         <button
           type="button"
           className="primary-button"
-          disabled={!stockKnown || !selected || stock === 0 || quantity > stock || busy}
+          disabled={
+            store.authStatus === 'loading' ||
+            !stockKnown ||
+            !selected ||
+            stock === 0 ||
+            quantity > stock ||
+            busy
+          }
           onClick={() => void addToCart()}
         >
           {!stockKnown

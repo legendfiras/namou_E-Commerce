@@ -34,12 +34,14 @@ import type {
   WishlistItem,
 } from '../types/store.ts';
 import {
+  accountRecordForSignIn,
   loadUserRecord,
   resetPersistedDemo,
   saveUserRecord,
   GUEST_ACCOUNT,
   STORAGE_VERSION,
 } from './persistence.ts';
+import { takePendingAction } from './pendingAction.ts';
 
 export type StoreConnectionStatus = 'loading' | 'ready' | 'error';
 
@@ -52,7 +54,10 @@ type StoreContextValue = {
   wishlist: WishlistItem[];
   orders: Order[];
   inventory: InventoryMap;
-  signInWithGoogle: (credential: string) => Promise<ActionResult>;
+  signInWithGoogle: (
+    credential: string,
+  ) => Promise<{ ok: true; email: string } | { ok: false; message: string }>;
+  fulfillPendingAction: (email: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   addToCart: (
     productId: string,
@@ -82,17 +87,16 @@ type StoreContextValue = {
 
 const StoreContext = createContext<StoreContextValue | null>(null);
 
-function accountId(session: Session | null): string {
-  return session?.email ?? GUEST_ACCOUNT;
-}
-
 function persistUser(
   session: Session | null,
   cart: CartItem[],
   wishlist: WishlistItem[],
   orders: Order[],
 ) {
-  saveUserRecord(accountId(session), {
+  if (!session) {
+    return;
+  }
+  saveUserRecord(session.email, {
     version: STORAGE_VERSION,
     cart,
     wishlist,
@@ -115,13 +119,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<WishlistItem[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-
-  const loadUser = useCallback((nextSession: Session | null) => {
-    const record = loadUserRecord(accountId(nextSession));
-    setCart(record.cart);
-    setWishlist(record.wishlist);
-    setOrders(record.orders);
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -156,16 +153,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         if (user) {
           setSession(user);
-          const record = loadUserRecord(user.email);
+          const record = accountRecordForSignIn(
+            loadUserRecord(user.email),
+            loadUserRecord(GUEST_ACCOUNT),
+          );
           setCart(record.cart);
           setWishlist(record.wishlist);
           setOrders(record.orders);
         } else {
           setSession(null);
-          const record = loadUserRecord(GUEST_ACCOUNT);
-          setCart(record.cart);
-          setWishlist(record.wishlist);
-          setOrders(record.orders);
+          setCart([]);
+          setWishlist([]);
+          setOrders([]);
         }
         setAuthStatus('ready');
       })
@@ -186,32 +185,89 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [authAttempt]);
 
   const signInWithGoogle = useCallback(
-    async (credential: string): Promise<ActionResult> => {
+    async (
+      credential: string,
+    ): Promise<{ ok: true; email: string } | { ok: false; message: string }> => {
       const result = await requestGoogleSignIn(credential);
       if (!result.ok) {
         return result;
       }
-      const guest = loadUserRecord(GUEST_ACCOUNT);
-      const signedIn = loadUserRecord(result.session.email);
-      saveUserRecord(result.session.email, {
-        version: STORAGE_VERSION,
-        cart: signedIn.cart.length ? signedIn.cart : guest.cart,
-        wishlist: signedIn.wishlist.length ? signedIn.wishlist : guest.wishlist,
-        orders: signedIn.orders.length ? signedIn.orders : guest.orders,
-      });
+      const record = accountRecordForSignIn(
+        loadUserRecord(result.session.email),
+        loadUserRecord(GUEST_ACCOUNT),
+      );
       setSession(result.session);
-      loadUser(result.session);
+      setCart(record.cart);
+      setWishlist(record.wishlist);
+      setOrders(record.orders);
       setAuthStatus('ready');
-      return { ok: true };
+      return { ok: true, email: result.session.email };
     },
-    [loadUser],
+    [],
+  );
+
+  const fulfillPendingAction = useCallback(
+    async (email: string): Promise<string | null> => {
+      const action = takePendingAction();
+      if (!action) {
+        return null;
+      }
+      const record = accountRecordForSignIn(
+        loadUserRecord(email),
+        loadUserRecord(GUEST_ACCOUNT),
+      );
+      if (action.type === 'add-to-wishlist') {
+        const already = record.wishlist.some(
+          (item) => item.productId === action.productId,
+        );
+        const wishlist = already
+          ? record.wishlist
+          : [...record.wishlist, { productId: action.productId }];
+        if (!already) {
+          saveUserRecord(email, { ...record, wishlist });
+        }
+        setCart(record.cart);
+        setWishlist(wishlist);
+        setOrders(record.orders);
+        return already
+          ? `${action.productName} is already on your wishlist.`
+          : `${action.productName} saved to your wishlist.`;
+      }
+      if (stockStatus !== 'ready') {
+        setCart(record.cart);
+        setWishlist(record.wishlist);
+        setOrders(record.orders);
+        return 'Availability is still being checked, so the item was not added.';
+      }
+      const result = addCartItem(
+        record.cart,
+        action.productId,
+        action.variantId,
+        action.quantity,
+        (variantId) => inventory[variantId],
+      );
+      if (!result.ok) {
+        setCart(record.cart);
+        setWishlist(record.wishlist);
+        setOrders(record.orders);
+        return result.message;
+      }
+      saveUserRecord(email, { ...record, cart: result.items });
+      setCart(result.items);
+      setWishlist(record.wishlist);
+      setOrders(record.orders);
+      return `Added ${action.quantity} ${action.productName} in ${action.color} to cart.`;
+    },
+    [inventory, stockStatus],
   );
 
   const signOut = useCallback(async () => {
     await logout();
     setSession(null);
-    loadUser(null);
-  }, [loadUser]);
+    setCart([]);
+    setWishlist([]);
+    setOrders([]);
+  }, []);
 
   const addToCart = useCallback(
     async (
@@ -221,6 +277,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     ): Promise<ActionResult> => {
       if (authStatus !== 'ready') {
         return { ok: false, message: 'Your account is still loading.' };
+      }
+      if (!session) {
+        return { ok: false, message: 'Sign in to add this item to your cart.' };
       }
       if (stockStatus !== 'ready') {
         return {
@@ -248,7 +307,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const updateQuantity = useCallback(
     async (variantId: string, quantity: number): Promise<ActionResult> => {
-      if (authStatus !== 'ready' || stockStatus !== 'ready') {
+      if (authStatus !== 'ready' || !session || stockStatus !== 'ready') {
         return {
           ok: false,
           message: 'Availability is still being checked.',
@@ -273,7 +332,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const removeFromCart = useCallback(
     async (variantId: string) => {
-      if (authStatus !== 'ready') {
+      if (authStatus !== 'ready' || !session) {
         return;
       }
       await mockWait();
@@ -290,7 +349,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toVariantId: string,
       toProductId: string,
     ): Promise<ActionResult> => {
-      if (authStatus !== 'ready' || stockStatus !== 'ready') {
+      if (authStatus !== 'ready' || !session || stockStatus !== 'ready') {
         return {
           ok: false,
           message: 'Availability is still being checked.',
@@ -316,7 +375,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const toggleWishlist = useCallback(
     async (productId: string) => {
-      if (authStatus !== 'ready') {
+      if (authStatus !== 'ready' || !session) {
         return { added: false };
       }
       await mockWait();
@@ -333,7 +392,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const removeFromWishlist = useCallback(
     async (productId: string) => {
-      if (authStatus !== 'ready') {
+      if (authStatus !== 'ready' || !session) {
         return;
       }
       await mockWait();
@@ -437,6 +496,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       orders,
       inventory,
       signInWithGoogle,
+      fulfillPendingAction,
       signOut,
       addToCart,
       updateQuantity,
@@ -457,6 +517,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       changeVariant,
       catalogVersion,
       checkout,
+      fulfillPendingAction,
       inventory,
       isWishlisted,
       orders,

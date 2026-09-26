@@ -1,11 +1,12 @@
 import { useCallback, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   categoryLabel,
   formatStorageLabel,
   startingPriceCents,
 } from '../../domain/catalogQuery.ts';
 import { formatUsd } from '../../domain/money.ts';
+import { savePendingAction } from '../../store/pendingAction.ts';
 import { useStore } from '../../store/StoreContext.tsx';
 import type { Product } from '../../types/store.ts';
 import { ProductImage } from './ProductImage.tsx';
@@ -22,9 +23,11 @@ export function ProductCard({
   priority = false,
   onFeedback,
 }: ProductCardProps) {
-  const { isWishlisted, toggleWishlist, authStatus } = useStore();
+  const { isWishlisted, toggleWishlist, authStatus, session } = useStore();
+  const navigate = useNavigate();
+  const location = useLocation();
   const accountReady = authStatus === 'ready';
-  const saved = accountReady && isWishlisted(product.id);
+  const saved = accountReady && !!session && isWishlisted(product.id);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const preview =
     product.variants.find((variant) => variant.id === previewId) ?? null;
@@ -56,15 +59,35 @@ export function ProductCard({
           type="button"
           className="icon-button wishlist-button"
           aria-pressed={saved}
-          disabled={!accountReady}
+          disabled={authStatus === 'loading'}
           aria-label={
-            !accountReady
+            authStatus === 'loading'
               ? `Wishlist for ${product.name} is unavailable until your account is checked`
               : saved
                 ? `Remove ${product.name} from wishlist`
                 : `Add ${product.name} to wishlist`
           }
           onClick={() => {
+            if (authStatus === 'loading') {
+              return;
+            }
+            if (authStatus === 'error') {
+              onFeedback(
+                'We could not confirm your account. Try again before saving this item.',
+              );
+              return;
+            }
+            if (!session) {
+              savePendingAction({
+                type: 'add-to-wishlist',
+                productId: product.id,
+                productName: product.name,
+              });
+              navigate(
+                `/login?from=${encodeURIComponent(`${location.pathname}${location.search}`)}`,
+              );
+              return;
+            }
             void toggleWishlist(product.id).then((result) => {
               onFeedback(
                 result.added

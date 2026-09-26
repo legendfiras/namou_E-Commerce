@@ -185,6 +185,20 @@ export function loadUserRecord(email: string): UserRecord {
   }
 }
 
+/** The signed-in account record is kept as stored. A legacy guest cart is never copied in. */
+export function accountRecordForSignIn(
+  account: UserRecord,
+  guest: UserRecord,
+): UserRecord {
+  void guest;
+  return {
+    version: STORAGE_VERSION,
+    cart: account.cart,
+    wishlist: account.wishlist,
+    orders: account.orders,
+  };
+}
+
 export function saveUserRecord(email: string, record: UserRecord): void {
   localStorage.setItem(
     userKey(email),

@@ -20,9 +20,10 @@ export function StoreLayout({
   const [mobileQuery, setMobileQuery] = useState('');
   const navigate = useNavigate();
   const accountReady = authStatus === 'ready';
-  const cartCount = accountReady
-    ? cart.reduce((sum, item) => sum + item.quantity, 0)
-    : 0;
+  const cartCount =
+    accountReady && session
+      ? cart.reduce((sum, item) => sum + item.quantity, 0)
+      : 0;
 
   const openSearch = (query: string) => {
     const q = query.trim();

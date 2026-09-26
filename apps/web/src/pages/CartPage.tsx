@@ -102,10 +102,18 @@ export function CartPage({
                   fallbacks={variant.images.slice(1)}
                   alt={`${product.name} ${variant.color}`}
                 />
-                <div>
-                  <h2>{product.name}</h2>
+                <div className="cart-line-copy">
+                  <div className="cart-line-head">
+                    <h2>{product.name}</h2>
+                    <p className="cart-line-total">
+                      {formatUsd(variant.priceCents * item.quantity)}
+                    </p>
+                  </div>
                   <p className="muted">
                     {variant.color} · {formatStorageLabel(variant.storage)}
+                    {item.quantity > 1
+                      ? ` · ${formatUsd(variant.priceCents)} each`
+                      : ''}
                   </p>
                   <p className={stockKnown && store.stockFor(variant.id) <= 3 ? 'status-warn' : 'muted'}>
                     {confirmedStockText(
@@ -115,7 +123,6 @@ export function CartPage({
                         stock === 0 ? 'Out of stock' : `${stock} in stock`,
                     )}
                   </p>
-                  <p>{formatUsd(variant.priceCents)}</p>
                   {colors.length > 1 ? (
                     <ColorPicker
                       options={colors}
@@ -148,46 +155,48 @@ export function CartPage({
                       }}
                     />
                   ) : null}
-                  <label className="field">
-                    Quantity
-                    <input
-                      type="number"
-                      min={1}
-                      max={Math.max(stockKnown ? store.stockFor(variant.id) : item.quantity, 1)}
-                      step={1}
-                      value={item.quantity}
-                      disabled={
-                        !stockKnown ||
-                        busyId === item.variantId ||
-                        store.stockFor(variant.id) === 0
-                      }
-                      onChange={(event) => {
-                        setBusyId(item.variantId);
-                        void store
-                          .updateQuantity(
-                            item.variantId,
-                            Number(event.target.value),
-                          )
-                          .then((result) => {
-                            setBusyId(null);
-                            if (!result.ok) {
-                              onFeedback(result.message);
-                            }
-                          });
+                  <div className="cart-line-actions">
+                    <label className="field">
+                      Quantity
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={Math.max(stockKnown ? store.stockFor(variant.id) : item.quantity, 1)}
+                        step={1}
+                        value={item.quantity}
+                        disabled={
+                          !stockKnown ||
+                          busyId === item.variantId ||
+                          store.stockFor(variant.id) === 0
+                        }
+                        onChange={(event) => {
+                          setBusyId(item.variantId);
+                          void store
+                            .updateQuantity(
+                              item.variantId,
+                              Number(event.target.value),
+                            )
+                            .then((result) => {
+                              setBusyId(null);
+                              if (!result.ok) {
+                                onFeedback(result.message);
+                              }
+                            });
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="ghost-button"
+                      onClick={() => {
+                        void store.removeFromCart(item.variantId);
                       }}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => {
-                      void store.removeFromCart(item.variantId);
-                    }}
-                  >
-                    Remove
-                  </button>
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
-                <p>{formatUsd(variant.priceCents * item.quantity)}</p>
               </article>
             );
           })}
