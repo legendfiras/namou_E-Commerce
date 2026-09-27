@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AvailabilityNotice } from '../components/layout/AvailabilityNotice.tsx';
 import { Breadcrumbs } from '../components/layout/Breadcrumbs.tsx';
@@ -64,6 +64,29 @@ export function ProductDetailPage({
   const fallbacks = selected?.images.slice(1) ?? [];
 
   const stock = stockKnown && selected ? store.stockFor(selected.id) : 0;
+
+  useEffect(() => {
+    const previousRestoration = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    return () => {
+      window.history.scrollRestoration = previousRestoration;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    setColor('');
+    setQuantity(1);
+    const scrollToProduct = () => {
+      window.scrollTo(0, 0);
+    };
+    scrollToProduct();
+    const frame = window.requestAnimationFrame(scrollToProduct);
+    const timer = window.setTimeout(scrollToProduct, 0);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [slug]);
 
   useEffect(() => {
     if (stock > 0 && quantity > stock) {

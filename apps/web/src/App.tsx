@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { RequireAuth } from './components/layout/RequireAuth.tsx';
 import { StoreLayout } from './components/layout/StoreLayout.tsx';
 import { CartPage } from './pages/CartPage.tsx';
@@ -13,6 +13,24 @@ import { ProductListPage } from './pages/ProductListPage.tsx';
 import { WishlistPage } from './pages/WishlistPage.tsx';
 import { clearPendingAction } from './store/pendingAction.ts';
 import { StoreProvider, useStore } from './store/StoreContext.tsx';
+
+function HomeEntry({
+  onFeedback,
+}: {
+  onFeedback: (message: string) => void;
+}) {
+  const { session, authStatus } = useStore();
+
+  if (authStatus === 'ready' && session) {
+    return <HomePage onFeedback={onFeedback} />;
+  }
+
+  if (authStatus === 'loading') {
+    return <ProductListPage onFeedback={onFeedback} />;
+  }
+
+  return <Navigate to="/products" replace />;
+}
 
 function DropPendingActionOnCancel() {
   const location = useLocation();
@@ -48,7 +66,7 @@ export default function App() {
         <DropPendingActionOnCancel />
         <Routes>
           <Route element={<StoreLayout toast={toast} setToast={setToast} />}>
-            <Route path="/" element={<HomePage onFeedback={setToast} />} />
+            <Route path="/" element={<HomeEntry onFeedback={setToast} />} />
             <Route
               path="/products"
               element={<ProductListPage onFeedback={setToast} />}

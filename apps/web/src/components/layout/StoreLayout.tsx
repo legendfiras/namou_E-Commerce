@@ -234,30 +234,32 @@ export function StoreLayout({
       <footer className="site-footer">
         <div className="footer-inner">
           <div className="footer-brand">
-            <BrandLockup size="md" />
+            <BrandLockup />
             <p>An Apple store for iPhone, AirPods, Mac, and iPad.</p>
           </div>
           <nav className="footer-nav" aria-label="Footer">
             <div className="footer-col">
               <h2>Shop</h2>
-              <Link to="/products">All products</Link>
-              <Link to="/products?category=iphone">iPhone</Link>
-              <Link to="/products?category=airpods">AirPods</Link>
-              <Link to="/products?category=mac">Mac</Link>
-              <Link to="/products?category=ipad">iPad</Link>
+              <div className="footer-links">
+                <Link to="/products">All products</Link>
+                <Link to="/products?category=iphone">iPhone</Link>
+                <Link to="/products?category=airpods">AirPods</Link>
+                <Link to="/products?category=mac">Mac</Link>
+                <Link to="/products?category=ipad">iPad</Link>
+              </div>
             </div>
             <div className="footer-col">
               <h2>Account</h2>
-              <Link to="/cart">Cart</Link>
-              <Link to="/wishlist">Wishlist</Link>
-              {accountReady && !session ? (
-                <Link to="/login">Sign in</Link>
-              ) : null}
+              <div className="footer-links">
+                <Link to="/cart">Cart</Link>
+                <Link to="/wishlist">Wishlist</Link>
+                {accountReady && !session ? (
+                  <Link to="/login">Sign in</Link>
+                ) : null}
+              </div>
             </div>
           </nav>
-        </div>
-        <div className="footer-base">
-          <p>© 2026 Firas Cell</p>
+          <p className="footer-copy">© 2026 Firas Cell</p>
         </div>
       </footer>
 
